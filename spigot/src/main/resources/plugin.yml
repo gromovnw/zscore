@@ -1,0 +1,16 @@
+name: zScore
+version: '${version}'
+main: it.gromov.zscore.spigot.ZScoreSpigotPlugin
+author: gromov
+website: 'https://zdonate.me'
+# Специально без api-version — как и zpayments, плагин собран только на
+# публичном Bukkit API, поэтому не имеет смысла запирать его в конкретную
+# линейку версий: Paper/Spigot от 1.8 до актуальных загрузят его одинаково.
+commands:
+  zscore:
+    description: 'Управление плагином zScore'
+    permission: zscore.command.admin
+permissions:
+  zscore.command.admin:
+    description: 'Доступ к /zscore (setup, status, testconnection, reload)'
+    default: op

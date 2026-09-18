@@ -1,0 +1,4 @@
+name: zScore
+main: it.gromov.zscore.bungee.ZScoreBungeePlugin
+version: '${version}'
+author: gromov

@@ -1,0 +1,19 @@
+# Gradle build output
+.gradle/
+.kotlin/
+build/
+*/build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+
+# Рантайм-конфиг реального сервера — Okaeri генерирует их на лету из
+# аннотированных дефолтов, здесь их не бывает, но на всякий случай.
+*.log
+config.yml
+messages.yml

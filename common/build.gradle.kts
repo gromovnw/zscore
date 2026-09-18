@@ -18,4 +18,5 @@ java {
 dependencies {
     api("eu.okaeri:okaeri-configs-core:6.1.0-beta.4")
     api("eu.okaeri:okaeri-configs-yaml-snakeyaml:6.1.0-beta.4")
+    api("com.google.code.gson:gson:2.14.0")
 }

@@ -25,6 +25,7 @@ tasks.shadowJar {
     mergeServiceFiles()
     relocate("eu.okaeri", "it.gromov.zscore.shaded.eu.okaeri")
     relocate("org.yaml.snakeyaml", "it.gromov.zscore.shaded.org.yaml.snakeyaml")
+    relocate("com.google.gson", "it.gromov.zscore.shaded.com.google.gson")
 }
 
 tasks.build {

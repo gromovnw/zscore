@@ -3,6 +3,7 @@ package it.gromov.zscore.http
 import it.gromov.zscore.http.dto.PlayerSeenRequestDto
 import it.gromov.zscore.service.ConfigService
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -13,7 +14,11 @@ class PlayerApiClient(private val configService: ConfigService) {
 
     fun reportJoin(nickname: String, uuid: String, ip: String) {
         val body = PlayerSeenRequestDto(nickname, uuid, ip).toJson()
-        execute("POST", "/api/plugin/players/seen", body)
+        try {
+            execute("POST", "/api/plugin/players/seen", body)
+        } catch (exception: IOException) {
+            execute("POST", "/api/plugin/players/seen", body)
+        }
     }
 
     fun testConnection() {
@@ -24,7 +29,7 @@ class PlayerApiClient(private val configService: ConfigService) {
         val api = configService.config.api
         val timeoutMillis = maxOf(2, api.requestTimeoutSeconds) * 1000
 
-        val connection = URL(api.baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection
+        val connection = URL(API_BASE_URL + path).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
             connection.connectTimeout = timeoutMillis
@@ -57,5 +62,9 @@ class PlayerApiClient(private val configService: ConfigService) {
             return ""
         }
         return BufferedReader(InputStreamReader(stream, StandardCharsets.UTF_8)).use { it.readText() }
+    }
+
+    private companion object {
+        const val API_BASE_URL = "https://api.zdonate.me"
     }
 }

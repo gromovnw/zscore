@@ -9,14 +9,16 @@ import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.plugin.annotation.DataDirectory
 import com.velocitypowered.api.proxy.ProxyServer
 import it.gromov.zscore.ZScoreBootstrap
+import it.gromov.zscore.platform.IpUtil
 import it.gromov.zscore.platform.ZScoreLogger
 import org.slf4j.Logger
+import java.io.File
 import java.nio.file.Path
 
 @Plugin(
     id = "zscore",
     name = "zScore",
-    version = "1.0.0",
+    version = ZScoreVelocityPlugin.VERSION,
     description = "Модуль сбора статистики zDonate: репортит факты подключения игроков к прокси",
     authors = ["gromov"]
 )
@@ -31,13 +33,21 @@ class ZScoreVelocityPlugin @Inject constructor(
     @Subscribe
     fun onProxyInitialize(event: ProxyInitializeEvent) {
         bootstrap = ZScoreBootstrap(
-            dataDirectory.toFile(),
-            object : ZScoreLogger {
+            dataFolder = dataDirectory.toFile(),
+            logger = object : ZScoreLogger {
+                override fun info(message: String) {
+                    logger.info(message)
+                }
+
                 override fun warn(message: String, error: Throwable?) {
                     if (error != null) logger.warn(message, error) else logger.warn(message)
                 }
-            }
-        ) { runnable -> server.scheduler.buildTask(this, runnable).schedule() }
+            },
+            asyncExecutor = { runnable -> server.scheduler.buildTask(this, runnable).schedule() },
+            currentVersion = VERSION,
+            updateAssetPrefix = "zScore-Velocity-",
+            applyUpdate = ::applyUpdate
+        )
         bootstrap.enable()
 
         server.commandManager.register(
@@ -65,7 +75,16 @@ class ZScoreVelocityPlugin @Inject constructor(
     @Subscribe
     fun onPostLogin(event: PostLoginEvent) {
         val player = event.player
-        val ip = player.remoteAddress.address.hostAddress
+        val ip = IpUtil.hostAddressOf(player.remoteAddress) ?: return
         bootstrap.playerReportService.reportJoinAsync(player.username, player.uniqueId.toString(), ip)
+    }
+
+    private fun applyUpdate(bytes: ByteArray) {
+        val jarFile = File(ZScoreVelocityPlugin::class.java.protectionDomain.codeSource.location.toURI())
+        jarFile.writeBytes(bytes)
+    }
+
+    companion object {
+        const val VERSION = "1.0.0"
     }
 }

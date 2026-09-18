@@ -20,9 +20,19 @@ class StatusSubCommand(
             configService.messages.statusLine,
             mapOf(
                 "enabled" to configService.config.general.enabled.toString(),
-                "configured" to api.isConfigured().toString(),
-                "api-base-url" to api.baseUrl
+                "configured" to api.isConfigured().toString()
             )
         )
+
+        val problems = api.configProblems()
+        if (problems.isEmpty()) {
+            messageService.send(sender, configService.messages.statusNoProblems)
+            return
+        }
+
+        messageService.send(sender, configService.messages.statusProblemsHeader)
+        for (problem in problems) {
+            messageService.send(sender, configService.messages.statusProblemEntryFormat, mapOf("problem" to problem))
+        }
     }
 }

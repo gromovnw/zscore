@@ -2,6 +2,8 @@ package it.gromov.zscore.service.impl
 
 import it.gromov.zscore.command.SubCommand
 import it.gromov.zscore.command.ZScoreCommand
+import it.gromov.zscore.command.sub.DisableSubCommand
+import it.gromov.zscore.command.sub.EnableSubCommand
 import it.gromov.zscore.command.sub.HelpSubCommand
 import it.gromov.zscore.command.sub.ReloadSubCommand
 import it.gromov.zscore.command.sub.SetupSubCommand
@@ -30,6 +32,8 @@ class CommandServiceImpl(
         registered.add(ReloadSubCommand(configService, messageService, logger, reloadAction))
         registered.add(StatusSubCommand(configService, messageService))
         registered.add(TestConnectionSubCommand(configService, messageService, playerReportService))
+        registered.add(EnableSubCommand(configService, messageService, logger))
+        registered.add(DisableSubCommand(configService, messageService, logger))
         registered.add(0, HelpSubCommand(configService, messageService, registered))
 
         command = ZScoreCommand(configService, messageService)

@@ -21,9 +21,15 @@ class SetupSubCommand(
             return
         }
 
-        val shopId = args[0]
-        val serverId = args[1]
-        val pluginKey = args[2]
+        val shopId = args[0].trim()
+        val serverId = args[1].trim()
+        val pluginKey = args[2].trim()
+
+        val validationError = validate(shopId, serverId, pluginKey)
+        if (validationError != null) {
+            messageService.send(sender, configService.messages.setupInvalidArgument, mapOf("error" to validationError))
+            return
+        }
 
         try {
             val api = configService.config.api
@@ -45,5 +51,23 @@ class SetupSubCommand(
             )
             logger.warn("Ошибка сохранения настроек zScore: ${exception.message}", exception)
         }
+    }
+
+    private fun validate(shopId: String, serverId: String, pluginKey: String): String? {
+        if (shopId.isEmpty() || shopId.length > MAX_ID_LENGTH) {
+            return "shopId пустой или длиннее $MAX_ID_LENGTH символов"
+        }
+        if (serverId.isEmpty() || serverId.length > MAX_ID_LENGTH) {
+            return "serverId пустой или длиннее $MAX_ID_LENGTH символов"
+        }
+        if (pluginKey.length < MIN_PLUGIN_KEY_LENGTH) {
+            return "pluginKey выглядит обрезанным — скопируйте ключ целиком из личного кабинета"
+        }
+        return null
+    }
+
+    private companion object {
+        const val MAX_ID_LENGTH = 128
+        const val MIN_PLUGIN_KEY_LENGTH = 20
     }
 }

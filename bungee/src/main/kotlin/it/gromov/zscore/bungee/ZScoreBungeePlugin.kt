@@ -11,13 +11,21 @@ class ZScoreBungeePlugin : Plugin() {
 
     override fun onEnable() {
         bootstrap = ZScoreBootstrap(
-            dataFolder,
-            object : ZScoreLogger {
+            dataFolder = dataFolder,
+            logger = object : ZScoreLogger {
+                override fun info(message: String) {
+                    logger.log(Level.INFO, message)
+                }
+
                 override fun warn(message: String, error: Throwable?) {
                     logger.log(Level.WARNING, message, error)
                 }
-            }
-        ) { runnable -> proxy.scheduler.runAsync(this, runnable) }
+            },
+            asyncExecutor = { runnable -> proxy.scheduler.runAsync(this, runnable) },
+            currentVersion = description.version,
+            updateAssetPrefix = "zScore-Bungee-",
+            applyUpdate = { bytes -> file.writeBytes(bytes) }
+        )
         bootstrap.enable()
 
         proxy.pluginManager.registerListener(this, ZScoreBungeeListener(bootstrap))

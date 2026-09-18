@@ -1,6 +1,7 @@
 package it.gromov.zscore.spigot
 
 import it.gromov.zscore.ZScoreBootstrap
+import it.gromov.zscore.platform.IpUtil
 import it.gromov.zscore.platform.ZScoreLogger
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -10,6 +11,7 @@ import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.plugin.java.JavaPlugin
+import java.io.File
 import java.util.logging.Level
 
 class ZScoreSpigotPlugin : JavaPlugin(), Listener, CommandExecutor, TabCompleter {
@@ -18,13 +20,21 @@ class ZScoreSpigotPlugin : JavaPlugin(), Listener, CommandExecutor, TabCompleter
 
     override fun onEnable() {
         bootstrap = ZScoreBootstrap(
-            dataFolder,
-            object : ZScoreLogger {
+            dataFolder = dataFolder,
+            logger = object : ZScoreLogger {
+                override fun info(message: String) {
+                    logger.log(Level.INFO, message)
+                }
+
                 override fun warn(message: String, error: Throwable?) {
                     logger.log(Level.WARNING, message, error)
                 }
-            }
-        ) { runnable -> server.scheduler.runTaskAsynchronously(this, runnable) }
+            },
+            asyncExecutor = { runnable -> server.scheduler.runTaskAsynchronously(this, runnable) },
+            currentVersion = description.version,
+            updateAssetPrefix = "zScore-Spigot-",
+            applyUpdate = ::applyUpdate
+        )
         bootstrap.enable()
 
         server.pluginManager.registerEvents(this, this)
@@ -35,7 +45,7 @@ class ZScoreSpigotPlugin : JavaPlugin(), Listener, CommandExecutor, TabCompleter
     @EventHandler
     fun onPlayerJoin(event: PlayerJoinEvent) {
         val player = event.player
-        val ip = player.address?.address?.hostAddress ?: return
+        val ip = IpUtil.hostAddressOf(player.address) ?: return
         bootstrap.playerReportService.reportJoinAsync(player.name, player.uniqueId.toString(), ip)
     }
 
@@ -49,5 +59,13 @@ class ZScoreSpigotPlugin : JavaPlugin(), Listener, CommandExecutor, TabCompleter
             return emptyList()
         }
         return bootstrap.commandService.command.suggest(args[0])
+    }
+
+    private fun applyUpdate(bytes: ByteArray) {
+        val updateDir = File(dataFolder.parentFile, "update")
+        if (!updateDir.exists()) {
+            updateDir.mkdirs()
+        }
+        File(updateDir, getFile().name).writeBytes(bytes)
     }
 }

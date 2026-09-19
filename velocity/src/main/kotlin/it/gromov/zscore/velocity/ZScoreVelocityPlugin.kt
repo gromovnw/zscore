@@ -92,6 +92,6 @@ class ZScoreVelocityPlugin @Inject constructor(
     }
 
     companion object {
-        const val VERSION = "1.1.0"
+        const val VERSION = "1.2.0"
     }
 }

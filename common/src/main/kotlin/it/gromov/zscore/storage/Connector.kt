@@ -17,6 +17,7 @@ class SqliteConnector(private val file: File) : Connector {
         properties.setProperty("busy_timeout", "5000")
         properties.setProperty("journal_mode", "WAL")
         properties.setProperty("synchronous", "NORMAL")
+        properties.setProperty("transaction_mode", "IMMEDIATE")
         return org.sqlite.JDBC().connect("jdbc:sqlite:${file.absolutePath}", properties)
             ?: throw SQLException("SQLite драйвер не принял адрес ${file.absolutePath}")
     }

@@ -5,7 +5,7 @@ import java.sql.SQLException
 
 object Transactions {
 
-    private const val ATTEMPTS = 4
+    private const val ATTEMPTS = 6
 
     fun <T> run(connection: Connection, dialect: Dialect, block: () -> T): T {
         var attempt = 0

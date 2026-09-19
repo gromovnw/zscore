@@ -1,20 +1,21 @@
 # CLAUDE.md
 
-Памятка для ИИ-ассистента, впервые открывающего этот репозиторий. Коротко: это мультиплатформенный плагин сбора статистики zDonate (Velocity/BungeeCord/Spigot), который репортит на бэкенд сырые факты подключения игроков (ник/UUID/IP) и ничего не решает сам — вся diff-логика (новый ник, смена IP, дедуп) на стороне API.
+Памятка для ИИ-ассистента, впервые открывающего этот репозиторий. Коротко: это мультиплатформенный плагин сбора статистики zDonate (Velocity/BungeeCord/Spigot), который запоминает игроков в собственной базе (SQLite или MySQL) и репортит на бэкенд сырые факты подключения (ник/UUID/IP). Бизнес-оценку данных (что считать сменой ника/IP для антифрода) плагин не делает — она на стороне API; локально решается только, нужно ли вообще слать вход повторно (см. раздел про хранилище и доставку).
 
-Бэкенд, с которым плагин говорит по HTTP — отдельный закрытый проект (zdonate-landing), его код сюда не относится. Контракт ограничен тем, что видно в `http/PlayerApiClient.kt` и `http/dto/*`.
+Бэкенд, с которым плагин говорит по HTTP — бэкенд zDonate (отдельный закрытый проект), его код сюда не относится. Контракт ограничен тем, что видно в `http/PlayerApiClient.kt` и `http/dto/*`.
 
 ## Контракт с API (как его видит сам плагин)
 
 - `POST /api/plugin/players/seen` ← `{ nickname, uuid, ip }`
+- `POST /api/plugin/players/heartbeat` ← `{ platform, version, node }` — раз в секунду (20 тиков), см. раздел про heartbeat.
 - `GET /api/plugin/players/ping` — только проверка авторизации, для `/zscore testconnection`.
 - Заголовки авторизации: `X-Shop-Id`, `X-Server-Id`, `X-Plugin-Key` — тот же принцип, что и у zpayments (`PlayerApiClient`).
-- `api-base-url` — константа `https://api.zdonate.me`, захардкожена в `PlayerApiClient` (`API_BASE_URL`), НЕ конфигурируется — как и `API_BASE_URL` в `ShopApiClient` у zpayments. Не выноси её обратно в `config.yml`.
+- `api-base-url` — константа `https://zdonate.me` (бэкенд отвечает на основном домене, отдельный `api.` не нужен), захардкожена в `PlayerApiClient` (`API_BASE_URL`), НЕ конфигурируется — как и `API_BASE_URL` в `ShopApiClient` у zpayments. Не выноси её обратно в `config.yml`.
 
 ## Архитектурные решения, которые НЕ случайны
 
-- **Мультиплатформенность через `common` + три тонких адаптера.** Вся бизнес-логика (конфиг, HTTP-клиент, команды, сообщения) — в `common`, собранном под байткод 8. Платформенные модули (`velocity`, `bungee`, `spigot`) только: (1) реализуют `platform.ZScoreSender`/маппят свой `CommandSender`/`CommandSource`, (2) слушают событие подключения игрока и достают из него `nickname`/`uuid`/`ip`, (3) регистрируют команду `/zscore` в своём API. Если нужно поменять поведение — почти всегда меняется `common`, а не платформенный модуль. Требование пользователя было явным и капсом: "ВЕЗДЕ ОБЯЗАТЕЛЬНО ОДНА И ТАЖЕ ЛОГИКА".
-- **Структура повторяет zpayments (`service`/`service.impl`, `command`/`command.sub`, `config`/`config.section`)** — намеренно, по прямому запросу, для единообразия между плагинами одного разработчика. `Service` — общий интерфейс жизненного цикла (`enable/reload/disable`), `SubCommand` — интерфейс одной подкоманды, `ZScoreCommand` — платформо-агностичный диспетчер (работает через `ZScoreSender`, не через нативный `CommandSender`).
+- **Мультиплатформенность через `common` + три тонких адаптера.** Вся бизнес-логика (конфиг, HTTP-клиент, команды, сообщения) — в `common`, собранном под байткод 8. Платформенные модули (`velocity`, `bungee`, `spigot`) только: (1) реализуют `platform.ZScoreSender`/маппят свой `CommandSender`/`CommandSource`, (2) слушают событие подключения игрока и достают из него `nickname`/`uuid`/`ip`, (3) регистрируют команду `/zscore` в своём API. Если нужно поменять поведение — почти всегда меняется `common`, а не платформенный модуль. Правило: на всех платформах логика одна и та же.
+- **Структура повторяет zpayments (`service`/`service.impl`, `command`/`command.sub`, `config`/`config.section`)** — намеренно, для единообразия между плагинами одного разработчика. `Service` — общий интерфейс жизненного цикла (`enable/reload/disable`), `SubCommand` — интерфейс одной подкоманды, `ZScoreCommand` — платформо-агностичный диспетчер (работает через `ZScoreSender`, не через нативный `CommandSender`).
 - **`PlayerReportService.testConnectionAsync`/`reportJoinAsync` сами уходят в переданный `asyncExecutor`.** Каждый платформенный модуль передаёт в `ZScoreBootstrap` свою реализацию (Velocity `scheduler.buildTask(...).schedule()`, Bungee `scheduler.runAsync(...)`, Spigot `runTaskAsynchronously(...)`) — HTTP-вызовы никогда не блокируют основной поток/событийный цикл платформы. `command/sub/TestConnectionSubCommand` не знает о планировщиках вообще — это осознанно вынесено в сервисный слой `common`, а не в команду (в отличие от zpayments, где `TestConnectionSubCommand` сам дёргает `Bukkit.getScheduler()`, потому что там только одна платформа).
 - **Sender-callback после `testConnectionAsync` шлёт сообщение прямо из async-потока**, без обратного прыжка на главный поток (в отличие от zpayments, который в `TestConnectionSubCommand` явно прыгает обратно через `runTask`). Отправка сообщения — не риск для Velocity/BungeeCord (async by design) и не жёсткое требование Bukkit API (в отличие от вызова ивентов/инвентарей). Если понадобится строгая синхронизация — добавлять её нужно в платформенном модуле, а не в `common` (там нет понятия "главный поток").
 - **`ColorUtil`/`PlaceholderUtil` в `common` не зависят ни от Bukkit `ChatColor`, ни от Adventure/kyori.** `ColorUtil.colorize` — собственная реализация `translateAlternateColorCodes('&', ...)`, потому что `common` собирается под три разных платформы с разными API форматирования текста. Результат — обычная строка с `§`-кодами; `VelocitySender` сам оборачивает её в `LegacyComponentSerializer.legacySection()` перед отправкой (Velocity ждёт `Component`, а не голую строку) — Bungee/Spigot принимают `§`-строку напрямую.
@@ -37,8 +38,42 @@
   - Версия для сравнения — `VERSION`-константа в @Plugin-аннотации (Velocity) либо `description.version` (Bungee/Spigot, оба читают её из `bungee.yml`/`plugin.yml`, куда Gradle подставляет `${version}` через `processResources.expand`). Поднимаешь версию релиза — меняй `version` в корневом `build.gradle.kts` И константу `ZScoreVelocityPlugin.VERSION` (её Gradle не подставляет — value class в аннотации Kotlin требует compile-time константу, `${project.version}` туда не прокинуть так же просто, как в YAML).
 - **DTO для GitHub API (`update/dto/*`) используют `@SerializedName`, в отличие от `http/dto/*` для zDonate API.** GitHub отдаёт snake_case (`tag_name`, `browser_download_url`), zDonate API — свой рукописный JSON без сериализатора вообще. Не приводи к единому стилю.
 
+## Локальное хранилище (SQLite / MySQL)
+
+Пакет `storage` в `common`. Ядро — `PlayerStore` (не зависит от конфига, поэтому тестируется напрямую), `StorageServiceImpl` только собирает его из `storage`-секции конфига. По умолчанию SQLite (`plugins/zScore/zscore.db`); для нескольких прокси нужен MySQL — у SQLite у каждого сервера свой файл, общего состояния нет (`/zscore status` про это предупреждает).
+
+Цель — чтобы несколько прокси, регистрирующих вход одного игрока в разное время, не расходились:
+
+- **Вход пишется одной транзакцией** (`PlayerStore.recordJoin`): карточка игрока (`players`), история ников (`player_names`) и IP (`player_ips`), запись в очередь (`outbox`). Строка игрока блокируется на время записи (`SELECT ... FOR UPDATE` в MySQL, `transaction_mode=IMMEDIATE` в SQLite — без него читающая-потом-пишущая транзакция при гонке получает `SQLITE_BUSY_SNAPSHOT`, который `busy_timeout` не лечит). Поэтому «новый игрок / новый ник / новый IP» определяется ровно один раз, какой бы узел ни записал первым. Дубль при первой вставке и дедлоки ловятся и повторяются в `Transactions.run`.
+- **Слияние не зависит от порядка записи:** `first_seen` = min, `last_seen` = max, счётчики только растут, ник/IP в карточке берутся из самого позднего события.
+- **Время событий приводится к часам базы** (`ClockSync`: сдвиг измеряется при подключении и раз в 5 минут по трём замерам, берётся с минимальным RTT). Так расхождение часов между прокси не ломает порядок событий. Для SQLite сдвиг нулевой.
+- **Регистр ников не важен:** `COLLATE NOCASE` (SQLite) и `utf8mb4_general_ci` (MySQL).
+- **Драйверы создаются напрямую** (`org.sqlite.JDBC().connect`, `com.mysql.cj.jdbc.Driver().connect`), а не через `DriverManager`: драйвер из загрузчика плагина `DriverManager` не видит. `org.sqlite` НЕ релоцируется — нативная библиотека привязана к именам классов (JNI); `com.mysql` релоцируется.
+- Схема создаётся и мигрируется сама (`SchemaManager`, версия в `meta`). Префикс таблиц — `storage.table-prefix` (валидируется regex-ом, подставляется в SQL напрямую, поэтому проверка обязательна).
+- Одно соединение на `ConnectionHolder` под `ReentrantLock`, с переподключением. Все вызовы хранилища — только из async-контекста (БД может отвечать долго): команды `player`/`status` ходят через `PlayerReportService.lookupPlayerAsync/storageStatsAsync`, а не напрямую.
+- Если база недоступна, вход шлётся напрямую в API без очереди (`PlayerReportServiceImpl.sendDirect`) — данные не теряются.
+- Идентификатор узла: `storage.node-id`, по умолчанию `auto` — `<платформа>-<8 hex>`, сохраняется в `plugins/zScore/node-id`.
+
+## Доставка (outbox)
+
+`PlayerStore.recordJoin` решает, слать ли вход: новый игрок, новый ник, новый IP или прошло `delivery.resend-after-minutes` (0 — слать каждый вход, как было до 1.2.0). Решение записывается в `outbox` в той же транзакции, `players.reported_at` ставится в момент постановки в очередь, а не отправки — иначе при недоступном API каждый вход плодил бы дубли.
+
+`DeliveryServiceImpl` забирает очередь по таймеру (`delivery.flush-interval-seconds`) и сразу после записи. Запись забирает ровно один узел: `claimPending` — `UPDATE ... claimed_by = <token>, claimed_until = now + 60s WHERE claimed_until < now AND id IN (SELECT ... LIMIT n)`. Условие `claimed_until < now` ОБЯЗАТЕЛЬНО повторено во внешнем `WHERE`: в MySQL второй узел после ожидания блокировки перечитывает строку и по этому условию пропускает уже забранную. При падении узла аренда истекает и запись подхватывает другой.
+
+Ошибки сети/5xx/429/401 — повтор с паузой 15 с × 2^n (максимум час); ответ 400 или `delivery.retry-max-attempts` попыток — запись отбрасывается с warn. `client.reportJoin` — ОДНА попытка (повторы делает очередь; раньше здесь был встроенный повтор). Записи старше `delivery.retention-days` удаляются раз в 5 минут вместе с пересинхронизацией часов.
+
+## Heartbeat
+
+`HeartbeatServiceImpl` шлёт `POST /api/plugin/players/heartbeat` каждые `heartbeat.interval-seconds` (по умолчанию 1 с = 20 тиков). Периодика идёт на собственных daemon-потоках (`util/TaskScheduler`) — у Velocity/Bungee нет понятия тика, а HTTP-вызовы всё равно уходят через `asyncExecutor` платформы. Один запрос за раз (`inFlight`), при потере связи — один warn на переход в «нет связи» и один info при восстановлении, не по строке на каждую секунду.
+
+Со стороны бэкенда zDonate: `server/api/plugin/players/heartbeat.post.ts` + `utils/shopPluginHeartbeat.ts` (последнее время в памяти, в таблицу `shop_plugin_heartbeats` пишется не чаще раза в 10 с). В `server/api/storefront/orders.post.ts`, если у магазина включена `playerVerification`, а последний heartbeat был больше 2000 тиков (100 с) назад — создание заказа/счёта отклоняется с `PLUGIN_OFFLINE` (503). Магазины без `playerVerification` не затрагиваются. У heartbeat своя корзина лимита авторизации плагина (`authBucket: 'heartbeat'`, 600/мин), иначе общий лимит 30/мин душил бы секундные запросы и заодно `seen`.
+
+## Тесты
+
+`./gradlew :common:test` — контрактные тесты хранилища (`PlayerStoreContract`), на SQLite всегда, на MySQL если задано `ZSCORE_TEST_MYSQL=host:port:database:user:password`. Среди них — одновременная запись двух узлов по одному игроку и эксклюзивный захват очереди. MySQL-тест создаёт таблицы со случайным префиксом и удаляет их сам.
+
 ## Чего здесь специально нет
 
-- Diff-логики (новый ник/смена IP/дедуп) — она на бэкенде, плагин только репортит сырые факты.
-- Прямого доступа к БД — только HTTP с теми же заголовками авторизации, что у zpayments, чтобы утечка одного `X-Plugin-Key` не компрометировала всю базу.
-- Периодического опроса/поллинга покупок — плагин событийный (репортит на join), не как zpayments (который опрашивает `pending`). Единственный периодический сетевой вызов — разовая проверка обновлений при старте.
+- Бизнес-оценки данных (антифрод по смене ника/IP и т.п.) — она на бэкенде. Локально плагин решает только «слать вход или нет» по фактам «новый игрок/ник/IP» и таймеру повторной отправки.
+- Прямого доступа к БД БЭКЕНДА — только HTTP с теми же заголовками авторизации, что у zpayments, чтобы утечка одного `X-Plugin-Key` не компрометировала всю базу.
+- Периодического опроса/поллинга покупок — плагин событийный (репортит на join), не как zpayments (который опрашивает `pending`). Периодических сетевых вызовов два: heartbeat и сброс очереди доставки; проверка обновлений — разовая, при старте.

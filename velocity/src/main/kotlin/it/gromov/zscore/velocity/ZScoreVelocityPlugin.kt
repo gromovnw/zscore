@@ -5,6 +5,7 @@ import com.velocitypowered.api.command.SimpleCommand
 import com.velocitypowered.api.event.Subscribe
 import com.velocitypowered.api.event.connection.PostLoginEvent
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent
+import com.velocitypowered.api.event.proxy.ProxyShutdownEvent
 import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.plugin.annotation.DataDirectory
 import com.velocitypowered.api.proxy.ProxyServer
@@ -44,6 +45,7 @@ class ZScoreVelocityPlugin @Inject constructor(
                 }
             },
             asyncExecutor = { runnable -> server.scheduler.buildTask(this, runnable).schedule() },
+            platform = "velocity",
             currentVersion = VERSION,
             updateAssetPrefix = "zScore-Velocity-",
             applyUpdate = ::applyUpdate
@@ -70,6 +72,11 @@ class ZScoreVelocityPlugin @Inject constructor(
                 }
             }
         )
+    }
+
+    @Subscribe
+    fun onProxyShutdown(event: ProxyShutdownEvent) {
+        bootstrap.disable()
     }
 
     @Subscribe

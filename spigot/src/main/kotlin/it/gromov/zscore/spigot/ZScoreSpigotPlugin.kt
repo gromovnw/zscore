@@ -31,6 +31,7 @@ class ZScoreSpigotPlugin : JavaPlugin(), Listener, CommandExecutor, TabCompleter
                 }
             },
             asyncExecutor = { runnable -> server.scheduler.runTaskAsynchronously(this, runnable) },
+            platform = "spigot",
             currentVersion = description.version,
             updateAssetPrefix = "zScore-Spigot-",
             applyUpdate = ::applyUpdate
@@ -40,6 +41,10 @@ class ZScoreSpigotPlugin : JavaPlugin(), Listener, CommandExecutor, TabCompleter
         server.pluginManager.registerEvents(this, this)
         getCommand("zscore")?.setExecutor(this)
         getCommand("zscore")?.setTabCompleter(this)
+    }
+
+    override fun onDisable() {
+        bootstrap.disable()
     }
 
     @EventHandler

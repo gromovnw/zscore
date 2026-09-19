@@ -22,6 +22,7 @@ class ZScoreBungeePlugin : Plugin() {
                 }
             },
             asyncExecutor = { runnable -> proxy.scheduler.runAsync(this, runnable) },
+            platform = "bungee",
             currentVersion = description.version,
             updateAssetPrefix = "zScore-Bungee-",
             applyUpdate = { bytes -> file.writeBytes(bytes) }
@@ -30,5 +31,9 @@ class ZScoreBungeePlugin : Plugin() {
 
         proxy.pluginManager.registerListener(this, ZScoreBungeeListener(bootstrap))
         proxy.pluginManager.registerCommand(this, ZScoreBungeeCommand(bootstrap))
+    }
+
+    override fun onDisable() {
+        bootstrap.disable()
     }
 }

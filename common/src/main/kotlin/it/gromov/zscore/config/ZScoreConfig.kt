@@ -7,6 +7,7 @@ import eu.okaeri.configs.annotation.Names
 import it.gromov.zscore.config.section.ApiSection
 import it.gromov.zscore.config.section.DeliverySection
 import it.gromov.zscore.config.section.GeneralSection
+import it.gromov.zscore.config.section.HeartbeatSection
 import it.gromov.zscore.config.section.StorageSection
 import it.gromov.zscore.config.section.UpdateSection
 
@@ -16,5 +17,6 @@ class ZScoreConfig : OkaeriConfig() {
     var api: ApiSection = ApiSection()
     var storage: StorageSection = StorageSection()
     var delivery: DeliverySection = DeliverySection()
+    var heartbeat: HeartbeatSection = HeartbeatSection()
     var update: UpdateSection = UpdateSection()
 }

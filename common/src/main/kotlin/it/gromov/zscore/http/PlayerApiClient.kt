@@ -1,9 +1,9 @@
 package it.gromov.zscore.http
 
+import it.gromov.zscore.http.dto.HeartbeatRequestDto
 import it.gromov.zscore.http.dto.PlayerSeenRequestDto
 import it.gromov.zscore.service.ConfigService
 import java.io.BufferedReader
-import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -13,12 +13,11 @@ import java.nio.charset.StandardCharsets
 class PlayerApiClient(private val configService: ConfigService) {
 
     fun reportJoin(nickname: String, uuid: String, ip: String) {
-        val body = PlayerSeenRequestDto(nickname, uuid, ip).toJson()
-        try {
-            execute("POST", "/api/plugin/players/seen", body)
-        } catch (exception: IOException) {
-            execute("POST", "/api/plugin/players/seen", body)
-        }
+        execute("POST", "/api/plugin/players/seen", PlayerSeenRequestDto(nickname, uuid, ip).toJson())
+    }
+
+    fun heartbeat(platform: String, version: String, node: String) {
+        execute("POST", "/api/plugin/players/heartbeat", HeartbeatRequestDto(platform, version, node).toJson())
     }
 
     fun testConnection() {
@@ -65,6 +64,6 @@ class PlayerApiClient(private val configService: ConfigService) {
     }
 
     private companion object {
-        const val API_BASE_URL = "https://api.zdonate.me"
+        const val API_BASE_URL = "https://zdonate.me"
     }
 }
